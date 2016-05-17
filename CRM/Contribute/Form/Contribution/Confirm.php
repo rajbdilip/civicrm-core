@@ -545,6 +545,25 @@ class CRM_Contribute_Form_Contribution_Confirm extends CRM_Contribute_Form_Contr
           if (isset($contact["{$name}_id"])) {
             $defaults["{$name}_id"] = $contact["{$name}_id"];
           }
+
+          $customFieldId = substr($name, 7, strlen($name) - 7);
+
+          $result = civicrm_api3('CustomField', 'get', array(
+            'sequential' => 1,
+            'id' => $customFieldId,
+          ));
+          $customField = $result['values'][0];
+
+          if ($customField['data_type'] == 'Date') {
+            $actualPHPFormats = CRM_Core_SelectValues::datePluginToPHPFormats();
+            $dateFormat = CRM_Utils_Array::value($customField['date_format'], $actualPHPFormats);
+
+            if (isset($customField['time_format'])) {
+              $dateFormat .= ($customField['time_format'] == 1) ? ' h:i A' : ' H:i';
+            }
+
+            $defaults[$name] = date($dateFormat, strtotime($defaults[$name]));
+          }
         }
         elseif (in_array($name, array(
             'addressee',
