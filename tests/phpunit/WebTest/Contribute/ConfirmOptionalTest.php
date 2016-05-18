@@ -61,6 +61,123 @@ class WebTest_Contribute_ConfirmOptionalTest extends CiviSeleniumTestCase {
   }
 
   /**
+   * Test CRM-18387
+   *
+   * @param $dateFormat
+   * @param $timeFormat
+   */
+  public function testCustomDateFieldFormat($dateFormat = "DD, d MM yy", $timeFormat = NULL) {
+    $this->webtestLogin();
+
+    $hash = substr(sha1(rand()), 0, 7);
+
+    // add new custom field set
+    $this->openCiviPage("admin/custom/group", "action=add&reset=1", "id=title");
+    // $this->waitForPageToLoad("30000");
+    $this->type("id=title", "Test Custom Field Set ($hash)");
+    $this->select("id=extends_0", "label=Contributions");
+    $this->clickLink("id=_qf_Group_next-bottom", "id=label");
+    // $this->waitForPageToLoad("30000");
+
+    // add new custom field
+    // $this->waitForElementPresent("id=label");
+    $this->type("id=label", "Test Custom Field ($hash)");
+    $this->select("id=data_type_0", "label=Date");
+    $this->select("id=date_format", "label=MM d, yyyy (December 31, 2009)");
+    if ($timeFormat) {
+      $this->select("id=time_format", "value=$timeFormat");
+    }
+    $this->click("id=_qf_Field_done-top");
+
+    // add new profile
+    $this->openCiviPage("admin/uf/group/add", "action=add&reset=1", "id=title");
+    $this->type("id=title", "Test Profile ($hash)");
+    $this->click("id=_qf_Group_next-bottom");
+    $this->clickLink("id=_qf_Group_next-bottom", "id=field_name_0");
+    // $this->waitForPageToLoad("30000");
+
+    // add a custom field to profile
+    // $this->waitForElementPresent("id=field_name_0");
+    $this->select("id=field_name_0", "label=Contributions");
+    $this->select("id=field_name_1", "label=Test Custom Field ($hash) :: Test Custom Field Set ($hash)");
+    $this->click("id=_qf_Field_next-top");
+    // $this->waitForPageToLoad("30000");
+
+    // add a new price set
+    $this->openCiviPage("admin/price", "reset=1&action=add", "id=title");
+    $this->pause( 4000 );
+    $this->type("id=title", "Test Price Set ($hash)");
+    $this->click("id=extends_2");
+    $this->select("id=financial_type_id", "label=Campaign Contribution");
+    $this->pause( 3000 );
+    $this->clickLink("id=_qf_Set_next-bottom", "id=label");
+    // ERROR: Instead of showing "Add New Price Field" dialog, redirects to civirm/admin/price page
+    // Selenium keeps waiting for "id=label"
+    $this->type("id=label", "Test Price Field Label ($hash)");
+    $this->type("id=price", "100");
+    $this->click("id=_qf_Field_next-top");
+
+    // CODE BELOW THIS WORKS!!
+
+    // add a new contribution page
+    $this->openCiviPage("admin/contribute/add", "reset=1&action=add", "id=title");
+    // $this->waitForPageToLoad("30000");
+    $this->type("id=title", "Test Contribution Page ($hash)");
+    $this->select("financial_type_id", "label=Campaign Contribution");
+    $this->clickLink("id=_qf_Settings_next-bottom", "id=price_set_id");
+    // $this->click("id=_qf_Settings_next-bottom");
+    // $this->waitForPageToLoad("30000");
+    // $this->waitForElementPresent("id=price_set_id");
+    
+    // get contribution page id
+    $pageId = $this->urlArg('id');
+    $this->select("id=price_set_id", "label=New Test Price Set");
+    // $this->select("id=price_set_id", "label=Test Price Set ($hash)");
+    $this->clickLink("id=_qf_Amount_next-bottom", "id=ui-id-11");
+    // $this->waitForPageToLoad("30000");
+
+    $this->click("id=ui-id-11");
+    $this->waitForElementPresent("id=_qf_Custom_upload_done-bottom");
+    
+    $this->select('css=tr.crm-contribution-contributionpage-custom-form-block-custom_pre_id span.crm-profile-selector-select select', "label=Test Profile (2ad4995)");
+    // $this->select('css=tr.crm-contribution-contributionpage-custom-form-block-custom_pre_id span.crm-profile-selector-select select', "label=New Test Profile ($hash)");
+    $this->click("id=_qf_Custom_upload_done-bottom");
+    $this->waitForPageToLoad("30000");
+
+    $this->openCiviPage("contribute/transact", "reset=1&id=$pageId");
+    // $this->waitForPageToLoad("30000");
+
+    $this->type("css=input[id^=price_]", "100");
+    $this->type("id=email-5", "demo@demo.org");
+    $this->waitForElementPresent("css=div#ui-datepicker-div.ui-datepicker div.ui-datepicker-header div.ui-datepicker-title span.ui-datepicker-month");
+    $this->select("css=div#ui-datepicker-div div.ui-datepicker-header div.ui-datepicker-title select.ui-datepicker-year", "value=2016");
+    $this->click("link=19");
+    $this->pause( 3000 );
+    $this->click("id=_qf_Main_upload-bottom");
+    $this->waitForPageToLoad("30000");
+
+    $actualPHPFormats = CRM_Core_SelectValues::datePluginToPHPFormats();
+    $dateFormat = CRM_Utils_Array::value($dateFormat, $actualPHPFormats);
+
+    if ( $timeFormat ) {
+      $timeFormat = ($timeFormat == 1) ? "h:i A" : "H:i";
+    }
+    $dateTimeFormat = $dateFormat." ".$timeFormat;
+
+    $dateTimeText = date($dateTimeFormat, strtotime("2016-05-19 10:30 AM"));
+    
+    // test format on confirmation page
+    $this->assertText('css=span.crm-frozen-field', $dateTimeText);
+
+    $this->click("id=_qf_Confirm_next-bottom");
+    $this->waitForPageToLoad("30000");
+
+    // test format on thank you page
+    // I realized I hadn't fixed this one. Need to fix date format on Thank You page
+    $this->assertText('css=span.crm-frozen-field', $dateTimeText);
+  }
+
+  /**
    * @param $isConfirmEnabled
    */
   protected function _addContributionPage($isConfirmEnabled) {
